@@ -1,0 +1,109 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="use_rviz" default="true"/>
+    <arg name="use_fake_image" default="false"/> <!--input image of projector-->
+    <arg name="use_quad_image" default="true"/>  <!--generate fake scene for camera-->
+    <arg name="has_extrinsics" default="true"/>
+    
+    <group if="$(arg has_extrinsics)">
+        <!--projector tf (parent: base_link)-->
+        <arg name="base_link" default="world"/>
+        <!--arg name="base_link" default="base_link"/-->
+        <arg name="projector_x" default="0.0"/>
+        <arg name="projector_y" default="0.0"/>
+        <arg name="projector_z" default="0.3"/>
+        <arg name="projector_roll" default="-2.2"/>  <!--the tilt angle-->
+        <arg name="projector_pitch" default="0"/>
+        <arg name="projector_yaw" default="-1.57"/>
+
+        <rosparam ns="projector" param="z" subst_value="true">$(arg projector_z)</rosparam>
+        <rosparam ns="projector" param="roll" subst_value="true">$(arg projector_roll)</rosparam>
+        <rosparam ns="projector" param="pitch" subst_value="true">$(arg projector_pitch)</rosparam>
+        <rosparam ns="projector" param="yaw" subst_value="true">$(arg projector_yaw)</rosparam>
+
+        <node pkg="tf2_ros" type="static_transform_publisher" name="projector_link"
+            args="$(arg projector_x) $(arg projector_y) $(arg projector_z) 0 0 0 $(arg base_link) projector_link" />
+        <node pkg="tf2_ros" type="static_transform_publisher" name="projector_optical_link"
+            args="0 0 0 $(arg projector_yaw) $(arg projector_pitch) $(arg projector_roll) projector_link projector_optical_link"/>
+    </group>
+
+    <group unless="$(arg has_extrinsics)">
+        <!--quad1 tf (projected image on ground) (parent: world)-->
+        <arg name="base_link" default="world"/>
+        <arg name="quad1_x" default="0.5"/>
+        <arg name="quad1_y" default="0.3"/>
+        
+        <!--size of projection, measured on ground-->
+        <rosparam ns="projector" param="result/height" subst_value="true">0.34</rosparam>
+        <rosparam ns="projector" param="result/lower_width" subst_value="true">0.47</rosparam>
+        <rosparam ns="projector" param="result/upper_width" subst_value="true">0.66</rosparam>
+    
+        <node pkg="tf2_ros" type="static_transform_publisher" name="quad1_link"
+            args="$(arg quad1_x) $(arg quad1_y) 0 -1.57 0 3.14 $(arg base_link) quad1_link" />
+    </group>
+   
+    <!--projector optical parameters-->
+    <arg name="projector_hfov" default="0.7"/>
+    <arg name="projector_vfov" default="0.3"/>
+    <arg name="projector_aspect_w" default="16"/>
+    <arg name="projector_aspect_h" default="9"/>
+    <arg name="projector_size_factor" default="50"/>
+
+    <rosparam ns="projector" param="use_fake_image" subst_value="true">$(arg use_fake_image)</rosparam>
+    <rosparam ns="projector" param="has_extrinsics" subst_value="true">$(arg has_extrinsics)</rosparam>
+    <rosparam ns="projector" param="hfov" subst_value="true">$(arg projector_hfov)</rosparam>
+    <rosparam ns="projector" param="vfov" subst_value="true">$(arg projector_vfov)</rosparam>
+    <rosparam ns="projector" param="aspect_w" subst_value="true">$(arg projector_aspect_w)</rosparam>
+    <rosparam ns="projector" param="aspect_h" subst_value="true">$(arg projector_aspect_h)</rosparam>
+    <rosparam ns="projector" param="size_factor" subst_value="true">$(arg projector_size_factor)</rosparam>
+
+    <!--camera height (can be random)-->
+    <arg name="camera_z_meters" default="0.8"/>
+    <rosparam ns="camera1" param="z_meters" subst_value="true">$(arg camera_z_meters)</rosparam>
+    
+    <!--fake source image-->
+    <group if="$(arg use_fake_image)">
+        <node pkg="image_publisher" type="image_publisher" name="src_img"
+            args="$(find projector)/images/sample_16x9.jpg" >
+            <param name="flip_horizontal" value="false" />
+            <param name="flip_vertical" value="false" />
+            <param name="frame_id" value="src_img" />
+            <param name="publish_rate" value="1" />
+        </node>
+    </group>
+
+    <!--real image from rviz camera-->
+    <group unless="$(arg use_fake_image)" ns="camera1" >
+        <node pkg="tf2_ros" type="static_transform_publisher" name="camera_broadcaster"
+            args="0.4 0.8 -$(arg camera_z_meters) 0 0 0 quad1_link camera1" />
+        <!--node name="camera_info" pkg="rostopic" type="rostopic"
+            args="pub -1 -f $(find projector)/config/camera_info.yaml camera_info sensor_msgs/CameraInfo"
+            output="screen"/-->
+        <rosparam param="image/disable_pub_plugins">
+            - 'image_transport/compressed'
+            - 'image_transport/compressedDepth'
+            - 'image_transport/theora'
+        </rosparam>
+    </group>
+
+    <!--generate image scene for camera1-->
+    <group if="$(arg use_quad_image)">
+        <node pkg="tf2_ros" type="static_transform_publisher" name="quad2_link"
+            args="0 0 $(arg camera_z_meters) 0 0 0 camera1 quad2_link" />
+        <node pkg="image_publisher" type="image_publisher" name="quad2_img"
+            args="$(find projector)/images/sample_16x9.jpg" >
+            <param name="flip_horizontal" value="false" />
+            <param name="flip_vertical" value="false" />
+            <param name="frame_id" value="quad2_link" />
+            <param name="publish_rate" value="1" />
+        </node>
+    </group>
+
+    <!--projection-->
+    <node pkg="projector" type="projection.py" name="projection"/>
+
+    <!--rviz-->
+    <arg name="rviz_config_file" default="$(find projector)/config/projector.rviz"/>
+    <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_config_file)"/>
+
+</launch>

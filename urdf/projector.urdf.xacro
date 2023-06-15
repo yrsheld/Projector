@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="projector">
+    
+    <xacro:include filename="$(find projector)/urdf/inertial_macros.xacro"/>
+    
+    <link name="base_link"/>
+    <link name="world"/>
+    
+    <joint name="world_joint" type="fixed">
+        <parent link="world"/>
+        <child link="base_link"/>
+        <!-- TODO: check base_link name of robot -->
+        <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
+    </joint>
+
+    <link name="projector_link">
+        <xacro:inertial_box mass="0.03" x="0.05" y="0.05" z="0.05">
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </xacro:inertial_box>
+        <visual>
+            <origin xyz="0.0 0.0 0.0"/>
+            <geometry>
+                <box size="0.05 0.05 0.05"/>
+            </geometry>
+            <material name="red"/>
+        </visual>
+        <collision>
+            <origin xyz="0.0 0.0 0.0"/>
+            <geometry>
+                <box size="0.05 0.05 0.05"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="projector_joint" type="fixed">
+        <origin xyz="-0.205 0.0 1.0" rpy="1.0 0.0 1.57"/>
+        <parent link="base_link"/>
+        <child link="projector_link"/>
+    </joint>
+
+    <!-- projector -->
+    <gazebo reference="projector_link">
+        <material>Gazebo/Red</material>
+        <projector name="projector1">
+            <pose> 0 0 0 0 0 0 </pose>
+            <texture>building_frame.png</texture>
+            <near_clip>0.01</near_clip>
+            <far_clip>10.0</far_clip>
+            <fov>0.5</fov>
+            <plugin name="projector_controller" filename="libgazebo_ros_projector.so">
+                <update_rate>10.0</update_rate>
+            </plugin>    
+        </projector>
+    </gazebo>
+
+</robot>
